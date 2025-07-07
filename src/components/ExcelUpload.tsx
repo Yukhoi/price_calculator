@@ -1,5 +1,4 @@
-import React, { useState, useMemo, useCallback, memo, Component } from 'react';
-import type { ErrorInfo, ReactNode } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import * as XLSX from 'xlsx';
 import StaticHeader from './StaticHeader';
 import ErrorBoundary from './ErrorBoundary';
@@ -61,7 +60,6 @@ const ClientFilter = memo(({
   selectedClients: string[];
   onClientChange: (client: string) => void;
 }) => {
-  console.log('ClientFilter 重新渲染'); // 调试日志
   
   // 添加安全检查
   if (!allClients || !Array.isArray(allClients)) {
@@ -198,9 +196,10 @@ const parseDate = (dateValue: any): Date => {
     }
 
     try {
+        console.log('开始解析日期:', dateValue, '类型:', typeof dateValue);
         // 如果是字符串
         if (typeof dateValue === 'string') {
-            const dateStr = dateValue.trim();
+            const dateStr = dateValue;
             console.log('开始解析字符串日期:', dateStr);
 
             // 自动检测并处理多种日期格式
@@ -316,9 +315,44 @@ const parseDate = (dateValue: any): Date => {
             console.warn('❌ 所有日期格式解析都失败，无法解析的日期格式:', dateStr);
             return new Date();
         }
-
+        else if (typeof dateValue === 'number') {
+          /**
+           * Excel 1900 日期系统处理：
+           * - 序列号1对应1900年1月1日
+           * - 序列号2对应1900年1月2日
+           * - 以此类推...
+           * - Excel错误地将1900年当作闰年，认为1900年2月29日存在（序列号60）
+           * - 从1900年3月1日开始（序列号61），所有日期都比实际日期晚1天
+           * 
+           * 修正方法：
+           * - 对于序列号1-59：直接计算（1900年1月1日到1900年2月28日）
+           * - 对于序列号>=61：减去2来修正（跳过不存在的1900年2月29日）
+           */
+          
+          console.log('Excel日期序列号:', dateValue);
+          
+          if (dateValue === 60) {
+            // Excel认为的1900年2月29日，这个日期实际不存在，应该是1900年2月28日
+            console.log('处理Excel错误的闰年日期60，返回1900年2月28日');
+            return new Date(1900, 1, 28); // 1900年2月28日
+          } else if (dateValue >= 61) {
+            // 1900年3月1日及之后，需要减去2（1个基准偏移 + 1个闰年错误修正）
+            const epoch = new Date(1900, 0, 1); // 1900年1月1日
+            const adjustedDays = dateValue - 2; // 减去2天修正
+            epoch.setDate(epoch.getDate() + adjustedDays);
+            console.log('处理序列号>=61:', dateValue, '调整后天数:', adjustedDays, '结果:', epoch);
+            return epoch;
+          } else {
+            // 1900年1月1日到1900年2月28日，直接计算
+            const epoch = new Date(1900, 0, 1); // 1900年1月1日
+            const adjustedDays = dateValue - 1; // 减去1天因为序列号1对应1月1日
+            epoch.setDate(epoch.getDate() + adjustedDays);
+            console.log('处理序列号1-59:', dateValue, '调整后天数:', adjustedDays, '结果:', epoch);
+            return epoch;
+          }
+        }
         // 如果是Date对象
-        if (dateValue instanceof Date) {
+        else if (dateValue instanceof Date) {
             return dateValue;
         }
 
@@ -333,6 +367,7 @@ const parseDate = (dateValue: any): Date => {
 
   // 智能格式化日期显示 - 根据原始数据格式决定输出格式
   const formatDateForDisplay = (date: Date, originalValue?: any): string => {
+    console.log('formatDateForDisplay', date, '原始值:', originalValue);
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const year = date.getFullYear();
@@ -353,6 +388,7 @@ const parseDate = (dateValue: any): Date => {
   // 筛选后的数据 - 增强错误处理
   const filteredData = useMemo(() => {
     try {
+      console.log('filteredData');
       if (!jsonData || !Array.isArray(jsonData)) {
         console.log('没有数据或数据格式错误');
         return [];
@@ -377,6 +413,7 @@ const parseDate = (dateValue: any): Date => {
             }
             
             const itemDate = parseDate(itemDateValue);
+            console.log('解析后的日期:', itemDate, '原始值:', itemDateValue);
             
             // 验证解析后的日期是否有效
             if (isNaN(itemDate.getTime())) {
@@ -437,27 +474,17 @@ const parseDate = (dateValue: any): Date => {
 
   // 转换JSON数据中的日期格式用于显示
   const formatJsonForDisplay = useMemo(() => {
+    console.log('formatJsonForDisplay');
     if (!filteredData || !Array.isArray(filteredData)) return [];
     
     return filteredData.map(item => {
       const newItem = { ...item };
+      // 如果是字符串日期，解析后重新格式化以保持一致性
       
-      // 如果日期字段是数字（Excel序列号），转换为可读格式
-      if (newItem['日期'] && typeof newItem['日期'] === 'number') {
-        const date = parseDate(newItem['日期']);
-        newItem['日期'] = formatDateForDisplay(date, newItem['日期']);
-      } else if (newItem['日期'] && typeof newItem['日期'] === 'string') {
-        // 如果是字符串但看起来像数字，也进行转换
-        const numericValue = parseFloat(newItem['日期']);
-        if (!isNaN(numericValue) && numericValue > 1 && numericValue < 100000) {
-          const date = parseDate(numericValue);
-          newItem['日期'] = formatDateForDisplay(date, numericValue);
-        } else {
-          // 如果是字符串日期，解析后重新格式化以保持一致性
-          const date = parseDate(newItem['日期']);
-          newItem['日期'] = formatDateForDisplay(date, newItem['日期']);
-        }
-      }
+      const date = parseDate(newItem['日期']);
+      console.log('原始日期:', newItem['日期'], '解析后的日期:', date);
+      newItem['日期'] = formatDateForDisplay(date, newItem['DATE']);
+      console.log('转换后的日期:', newItem['DATE']);
       
       return newItem;
     });
@@ -465,34 +492,24 @@ const parseDate = (dateValue: any): Date => {
 
   // 转换原始JSON数据中的日期格式用于显示
   const formatOriginalJsonForDisplay = useMemo(() => {
+    console.log('formatOriginalJsonForDisplay');
     if (!jsonData || !Array.isArray(jsonData)) return [];
     
     return jsonData.map(item => {
+      console.log('处理原始数据项:', item);
       const newItem = { ...item };
-      
-      // 如果日期字段是数字（Excel序列号），转换为可读格式
-      if (newItem['日期'] && typeof newItem['日期'] === 'number') {
-        const date = parseDate(newItem['日期']);
-        newItem['日期'] = formatDateForDisplay(date, newItem['日期']);
-      } else if (newItem['日期'] && typeof newItem['日期'] === 'string') {
-        // 如果是字符串但看起来像数字，也进行转换
-        const numericValue = parseFloat(newItem['日期']);
-        if (!isNaN(numericValue) && numericValue > 1 && numericValue < 100000) {
-          const date = parseDate(numericValue);
-          newItem['日期'] = formatDateForDisplay(date, numericValue);
-        } else {
-          // 如果是字符串日期，解析后重新格式化以保持一致性
-          const date = parseDate(newItem['日期']);
-          newItem['日期'] = formatDateForDisplay(date, newItem['日期']);
-        }
-      }
-      
+      // 如果是字符串日期，解析后重新格式化以保持一致性
+      const date = parseDate(newItem['日期']);
+      console.log('原始日期:', newItem['日期'], '解析后的日期:', date);
+      newItem['日期'] = formatDateForDisplay(date, newItem['DATE']);
+      console.log('转换后的日期:', newItem['DATE']);
       return newItem;
     });
   }, [jsonData]);
 
   // 计算总价格 - 添加安全检查
   const totalPrice = useMemo(() => {
+    console.log('计算总价格');
     try {
       if (!filteredData || !Array.isArray(filteredData)) return 0;
       return filteredData.reduce((sum, item) => {
@@ -507,6 +524,7 @@ const parseDate = (dateValue: any): Date => {
 
   // 格式化输出文本 - 添加安全检查
   const formatOutput = useMemo(() => {
+    console.log('formatOutput');
     try {
       if (!filteredData || !Array.isArray(filteredData)) return '';
       return filteredData.map(item => 
@@ -546,28 +564,6 @@ const parseDate = (dateValue: any): Date => {
     setEndDate('');
     setSelectedClients([]);
   }, []);
-
-  // 测试日期解析功能
-  const testDateParsing = () => {
-    const testDates = [
-      '24.12.2024',
-      '01.07.2025', 
-      '2024-12-24',
-      '2025-07-01',
-      '24/12/2024',
-      '2024/12/24',
-      '45810', // Excel 序列号
-      45810   // 数字形式
-    ];
-    
-    console.log('=== 开始测试日期解析功能 ===');
-    testDates.forEach((testDate, index) => {
-      console.log(`\n测试 ${index + 1}: ${testDate} (类型: ${typeof testDate})`);
-      const result = parseDate(testDate);
-      console.log(`结果: ${result.toISOString()} (${formatDateForDisplay(result, testDate)})`);
-    });
-    console.log('=== 测试完成 ===\n');
-  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -609,20 +605,6 @@ const parseDate = (dateValue: any): Date => {
                 onEndDateChange={handleEndDateChange}
               />
             </ErrorBoundary>
-
-            {/* 支持的日期格式提示 */}
-            <div style={{ 
-              marginBottom: '1rem', 
-              padding: '0.75rem', 
-              backgroundColor: '#e3f2fd', 
-              border: '1px solid #90caf9', 
-              borderRadius: '4px',
-              fontSize: '0.9rem',
-              color: '#1565c0'
-            }}>
-              <strong>📅 支持的日期格式：</strong> 
-              系统自动识别 dd.mm.yyyy、yyyy-mm-dd、dd/mm/yyyy、yyyy/mm/dd 格式及 Excel 日期序列号
-            </div>
 
             {/* 客户筛选 */}
             <ErrorBoundary>
