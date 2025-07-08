@@ -1,6 +1,6 @@
 {
   "homepage": "http://yukhoi.github.io/price_calculator",
-  "name": "price-cqlculator",
+  "name": "price-calculator",
   "private": true,
   "version": "0.0.0",
   "type": "module",
