@@ -20,7 +20,6 @@ const DateFilter = memo(({
   onStartDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onEndDateChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => {
-  console.log('DateFilter 重新渲染'); // 调试日志
   return (
     <div style={{ marginBottom: '1rem' }}>
       <label style={{ display: 'block', marginBottom: '0.5rem' }}>日期范围筛选：</label>
@@ -328,26 +327,21 @@ const parseDate = (dateValue: any): Date => {
            * - 对于序列号1-59：直接计算（1900年1月1日到1900年2月28日）
            * - 对于序列号>=61：减去2来修正（跳过不存在的1900年2月29日）
            */
-          
-          console.log('Excel日期序列号:', dateValue);
-          
+                    
           if (dateValue === 60) {
             // Excel认为的1900年2月29日，这个日期实际不存在，应该是1900年2月28日
-            console.log('处理Excel错误的闰年日期60，返回1900年2月28日');
             return new Date(1900, 1, 28); // 1900年2月28日
           } else if (dateValue >= 61) {
             // 1900年3月1日及之后，需要减去2（1个基准偏移 + 1个闰年错误修正）
             const epoch = new Date(1900, 0, 1); // 1900年1月1日
             const adjustedDays = dateValue - 2; // 减去2天修正
             epoch.setDate(epoch.getDate() + adjustedDays);
-            console.log('处理序列号>=61:', dateValue, '调整后天数:', adjustedDays, '结果:', epoch);
             return epoch;
           } else {
             // 1900年1月1日到1900年2月28日，直接计算
             const epoch = new Date(1900, 0, 1); // 1900年1月1日
             const adjustedDays = dateValue - 1; // 减去1天因为序列号1对应1月1日
             epoch.setDate(epoch.getDate() + adjustedDays);
-            console.log('处理序列号1-59:', dateValue, '调整后天数:', adjustedDays, '结果:', epoch);
             return epoch;
           }
         }
@@ -388,14 +382,10 @@ const parseDate = (dateValue: any): Date => {
   // 筛选后的数据 - 增强错误处理
   const filteredData = useMemo(() => {
     try {
-      console.log('filteredData');
       if (!jsonData || !Array.isArray(jsonData)) {
-        console.log('没有数据或数据格式错误');
         return [];
       }
-      
-      console.log('开始筛选数据, 总数:', jsonData.length, '筛选条件:', { startDate, endDate, selectedClients: selectedClients.length });
-      
+            
       const result = jsonData.filter(item => {
         if (!item) {
           console.warn('发现空数据项');
@@ -413,7 +403,6 @@ const parseDate = (dateValue: any): Date => {
             }
             
             const itemDate = parseDate(itemDateValue);
-            console.log('解析后的日期:', itemDate, '原始值:', itemDateValue);
             
             // 验证解析后的日期是否有效
             if (isNaN(itemDate.getTime())) {
@@ -463,7 +452,6 @@ const parseDate = (dateValue: any): Date => {
         return true;
       });
       
-      console.log('筛选完成，结果数量:', result.length);
       return result;
       
     } catch (error) {
@@ -482,9 +470,7 @@ const parseDate = (dateValue: any): Date => {
       // 如果是字符串日期，解析后重新格式化以保持一致性
       
       const date = parseDate(newItem['日期']);
-      console.log('原始日期:', newItem['日期'], '解析后的日期:', date);
       newItem['日期'] = formatDateForDisplay(date, newItem['DATE']);
-      console.log('转换后的日期:', newItem['DATE']);
       
       return newItem;
     });
@@ -492,7 +478,6 @@ const parseDate = (dateValue: any): Date => {
 
   // 转换原始JSON数据中的日期格式用于显示
   const formatOriginalJsonForDisplay = useMemo(() => {
-    console.log('formatOriginalJsonForDisplay');
     if (!jsonData || !Array.isArray(jsonData)) return [];
     
     return jsonData.map(item => {
@@ -500,16 +485,13 @@ const parseDate = (dateValue: any): Date => {
       const newItem = { ...item };
       // 如果是字符串日期，解析后重新格式化以保持一致性
       const date = parseDate(newItem['日期']);
-      console.log('原始日期:', newItem['日期'], '解析后的日期:', date);
       newItem['日期'] = formatDateForDisplay(date, newItem['DATE']);
-      console.log('转换后的日期:', newItem['DATE']);
       return newItem;
     });
   }, [jsonData]);
 
   // 计算总价格 - 添加安全检查
   const totalPrice = useMemo(() => {
-    console.log('计算总价格');
     try {
       if (!filteredData || !Array.isArray(filteredData)) return 0;
       return filteredData.reduce((sum, item) => {
@@ -524,7 +506,6 @@ const parseDate = (dateValue: any): Date => {
 
   // 格式化输出文本 - 添加安全检查
   const formatOutput = useMemo(() => {
-    console.log('formatOutput');
     try {
       if (!filteredData || !Array.isArray(filteredData)) return '';
       return filteredData.map(item => 
@@ -548,13 +529,11 @@ const parseDate = (dateValue: any): Date => {
   // 处理日期变化 - 使用 useCallback 优化
   const handleStartDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
-    console.log('开始日期变化:', newDate);
     setStartDate(newDate);
   }, []);
 
   const handleEndDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = e.target.value;
-    console.log('结束日期变化:', newDate);
     setEndDate(newDate);
   }, []);
 
